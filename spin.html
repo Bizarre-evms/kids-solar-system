@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Day and Night POC</title>
+<title>Spin</title>
 <style>
   html,body{margin:0;height:100%;background:#0b0f2b;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Comic Sans MS',sans-serif;overflow:hidden}
   #label{font-size:48px;color:#fff;margin-bottom:10px;transition:opacity .3s}
@@ -18,6 +18,7 @@
 <canvas id="c"></canvas>
 <div id="hint">Tap and drag the Earth to spin it!</div>
 <script src="assets.js"></script>
+<script src="ui.js"></script>
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -25,21 +26,22 @@ const label = document.getElementById('label');
 
 let W, H, cx, cy, earthR, sunX, sunY, sunR, moonOrbitR, moonR;
 
-function resize() {
-  const size = Math.floor(Math.min(window.innerWidth * 0.94, window.innerHeight * 0.8));
-  W = H = size;
-  canvas.width = W;
-  canvas.height = H;
-  cx = W / 2;
-  cy = H / 2;
-  earthR = W * 0.18;
-  sunX = W * 0.1;
-  sunY = cy;
-  sunR = W * 0.09;
-  moonOrbitR = earthR + W * 0.09;
-  moonR = W * 0.028;
-}
-window.addEventListener('resize', resize);
+SolarUI.setupResponsiveCanvas(canvas,
+  (iw, ih) => {
+    const size = Math.floor(Math.min(iw * 0.94, ih * 0.8));
+    return { width: size, height: size };
+  },
+  (w, h) => {
+    W = w; H = h;
+    cx = W / 2;
+    cy = H / 2;
+    earthR = W * 0.18;
+    sunX = W * 0.1;
+    sunY = cy;
+    sunR = W * 0.09;
+    moonOrbitR = earthR + W * 0.09;
+    moonR = W * 0.028;
+  });
 
 let angle = 0;
 let moonAngle = 0;
@@ -137,10 +139,9 @@ function updateLabel() {
   label.textContent = houseXOffset < 0 ? '☀️ Day!' : '🌙 Night!';
 }
 
-function angleAt(x, y) {
-  const rect = canvas.getBoundingClientRect();
-  const scale = W / rect.width;
-  return Math.atan2((y - rect.top) * scale - cy, (x - rect.left) * scale - cx);
+function angleAt(clientX, clientY) {
+  const { x, y } = SolarUI.clientToCanvas(canvas, W, clientX, clientY);
+  return Math.atan2(y - cy, x - cx);
 }
 
 canvas.addEventListener('pointerdown', (e) => {
@@ -167,7 +168,6 @@ function loop() {
   drawScene();
   requestAnimationFrame(loop);
 }
-resize();
 loop();
 </script>
 </body>

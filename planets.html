@@ -18,58 +18,41 @@
 <canvas id="c"></canvas>
 <div id="hint">The planets always line up in the same order, going out from the sun. Tap one to hear its name!</div>
 <script src="assets.js"></script>
+<script src="data.js"></script>
+<script src="ui.js"></script>
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const label = document.getElementById('label');
 
-const bodies = [
-  { name: 'Sun',     diam: 1391000, isSun: true, color: '#ffd93d', fact: "I'm a star, not a planet — but everyone circles around me!" },
-  { name: 'Mercury', diam: 4879,   color: '#b5a49a', fact: "I'm 1st from the sun, and the smallest planet!" },
-  { name: 'Venus',   diam: 12104,  color: '#e8c27a', fact: "I'm 2nd from the sun." },
-  { name: 'Earth',   diam: 12742,  color: '#4a90d9', fact: "I'm 3rd from the sun — this is home!" },
-  { name: 'Mars',    diam: 6779,   color: '#c1440e', fact: "I'm 4th from the sun, the red one!" },
-  { name: 'Jupiter', diam: 139820, color: '#d9a066', fact: "I'm 5th from the sun, and the BIGGEST planet of all!" },
-  { name: 'Saturn',  diam: 116460, color: '#e8d5a0', fact: "I'm 6th from the sun, with beautiful rings!", hasRings: true },
-  { name: 'Uranus',  diam: 50724,  color: '#9fd9d9', fact: "I'm 7th from the sun." },
-  { name: 'Neptune', diam: 49244,  color: '#4166f5', fact: "I'm 8th and last from the sun!" },
-];
+const bodies = SolarData.ALL;
 
 const minR = 16, maxR = 78, sunR = 95;
-const diamMin = Math.sqrt(Math.min(...bodies.filter(b => !b.isSun).map(b => b.diam)));
-const diamMax = Math.sqrt(Math.max(...bodies.filter(b => !b.isSun).map(b => b.diam)));
+const diamMin = Math.sqrt(Math.min(...SolarData.PLANETS.map(b => b.diam)));
+const diamMax = Math.sqrt(Math.max(...SolarData.PLANETS.map(b => b.diam)));
 bodies.forEach(b => {
-  if (b.isSun) { b.r = sunR; return; }
-  b.r = minR + (maxR - minR) * (Math.sqrt(b.diam) - diamMin) / (diamMax - diamMin);
+  b.r = b.isSun ? sunR : minR + (maxR - minR) * (Math.sqrt(b.diam) - diamMin) / (diamMax - diamMin);
 });
 
 let W, H, baseline;
 let highlighted = null;
 let highlightUntil = 0;
 
-function resize() {
-  W = Math.floor(Math.min(window.innerWidth * 0.96, 1100));
-  H = Math.floor(Math.min(window.innerHeight * 0.62, 420));
-  canvas.width = W;
-  canvas.height = H;
-  baseline = H * 0.72;
-  const margin = W * 0.06;
-  const slot = (W - margin * 2) / bodies.length;
-  bodies.forEach((b, i) => {
-    b.x = margin + slot * (i + 0.5);
-    b.y = baseline - b.r;
+SolarUI.setupResponsiveCanvas(canvas,
+  (iw, ih) => ({
+    width: Math.floor(Math.min(iw * 0.96, 1100)),
+    height: Math.floor(Math.min(ih * 0.62, 420)),
+  }),
+  (w, h) => {
+    W = w; H = h;
+    baseline = H * 0.72;
+    const margin = W * 0.06;
+    const slot = (W - margin * 2) / bodies.length;
+    bodies.forEach((b, i) => {
+      b.x = margin + slot * (i + 0.5);
+      b.y = baseline - b.r;
+    });
   });
-}
-window.addEventListener('resize', resize);
-
-function speak(text) {
-  if (!window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.rate = 0.85;
-  u.pitch = 1.15;
-  window.speechSynthesis.speak(u);
-}
 
 function draw() {
   ctx.clearRect(0, 0, W, H);
@@ -125,20 +108,17 @@ function bodyAt(x, y) {
 }
 
 canvas.addEventListener('click', (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const scale = W / rect.width;
-  const x = (e.clientX - rect.left) * scale;
-  const y = (e.clientY - rect.top) * scale;
+  const { x, y } = SolarUI.clientToCanvas(canvas, W, e.clientX, e.clientY);
   const b = bodyAt(x, y);
   if (!b) return;
   highlighted = b;
   highlightUntil = performance.now() + 700;
-  speak(b.name);
+  SolarUI.speak(b.name);
   label.textContent = b.name + '!';
-  setTimeout(() => { label.textContent = b.fact; }, 900);
+  const fact = b.facts[Math.floor(Math.random() * b.facts.length)];
+  setTimeout(() => { label.textContent = fact; }, 900);
 });
 
-resize();
 draw();
 </script>
 </body>

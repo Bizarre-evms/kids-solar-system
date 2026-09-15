@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Spin &amp; Orbit</title>
+<title>Orbit</title>
 <style>
   html,body{margin:0;height:100%;background:#05061a;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Comic Sans MS',sans-serif;overflow:hidden}
-  canvas{border-radius:16px;touch-action:none}
+  canvas{border-radius:16px;touch-action:none;max-width:100%;max-height:100%}
   #hint{color:#9aa;font-size:16px;margin-top:8px}
   #controls{position:fixed;top:14px;left:14px}
   button{padding:8px 16px;font-size:16px;border-radius:10px;border:none;cursor:pointer;background:#ffd93d;font-weight:bold;margin-right:6px}
@@ -27,75 +27,53 @@
   <button class="speed" data-speed="20">20x</button>
   <button id="zoomBtn">🔍 Zoom: Inner</button>
 </div>
-<canvas id="c" width="720" height="720"></canvas>
+<canvas id="c"></canvas>
 <div id="hint">Drag any planet to move it — watch what happens to the others! Tap a planet for a fact.</div>
 <div id="bubble"><div class="name"></div><div class="text"></div></div>
 <script src="assets.js"></script>
+<script src="data.js"></script>
+<script src="ui.js"></script>
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const bubble = document.getElementById('bubble');
 const playBtn = document.getElementById('playBtn');
-const W = canvas.width, H = canvas.height;
-const cx = W/2, cy = H/2;
+
+const BASE = 720; // design size everything below is tuned for; scaled by k on resize
+const ORBIT_SIZES = { Mercury: 6, Venus: 10, Earth: 11, Mars: 8, Jupiter: 24, Saturn: 21, Uranus: 15, Neptune: 15 };
 
 const EARTH_ORBIT_FRAMES = 480; // frames for one Earth orbit at normal speed
 const baseSpeed = (2 * Math.PI) / EARTH_ORBIT_FRAMES; // rad/frame for Earth
 const EARTH_SPINS_PER_ORBIT = 6;
-
-const planets = [
-  { name: 'Mercury', au: 0.39, period: 0.24, size: 6,  color: '#b5a49a', facts: [
-    "I'm the fastest! I zoom all the way around the sun in no time.",
-    "I'm the smallest planet of all!",
-    "I don't have any moons.",
-  ] },
-  { name: 'Venus',   au: 0.72, period: 0.62, size: 10, color: '#e8c27a', facts: [
-    "I'm the hottest planet — even hotter than Mercury!",
-    "I spin backwards compared to most planets!",
-    "I'm the brightest thing in our night sky, other than the Moon.",
-  ] },
-  { name: 'Earth',   au: 1.0,  period: 1.0,  size: 11, color: '#4a90d9', isEarth: true, facts: [
-    "I'm home! I spin around and around while I travel around the sun.",
-    "I'm the only planet with lots of liquid water on top!",
-    "I have one moon that circles around me.",
-  ] },
-  { name: 'Mars',    au: 1.52, period: 1.88, size: 8,  color: '#c1440e', facts: [
-    "I'm red and dusty!",
-    "I have the tallest mountain in the whole solar system!",
-    "I have two tiny moons, Phobos and Deimos.",
-  ] },
-  { name: 'Jupiter', au: 5.20, period: 11.86,size: 24, color: '#d9a066', facts: [
-    "I'm the biggest planet of all!",
-    "I have a giant storm bigger than Earth called the Great Red Spot!",
-    "I have dozens and dozens of moons!",
-  ] },
-  { name: 'Saturn',  au: 9.58, period: 29.4, size: 21, color: '#e8d5a0', hasRings: true, facts: [
-    "Look at my beautiful rings!",
-    "My rings are made of ice and rock!",
-    "I'm so light I could float in a giant bathtub!",
-  ] },
-  { name: 'Uranus',  au: 19.2, period: 83.7, size: 15, color: '#9fd9d9', facts: [
-    "I spin on my side, like a rolling ball!",
-    "I'm an icy blue-green color!",
-    "I have rings too, just like Saturn — they're just harder to see!",
-  ] },
-  { name: 'Neptune', au: 30.05,period:163.7, size: 15, color: '#4166f5', facts: [
-    "I'm icy, windy, and very far away!",
-    "I have the strongest winds of any planet!",
-    "I take 165 Earth years to go around the sun once!",
-  ] },
-];
-
-const minOrbit = 55, maxOrbit = 330;
-const auMin = Math.sqrt(planets[0].au), auMax = Math.sqrt(planets[planets.length-1].au);
-planets.forEach(p => {
-  p.orbitR = minOrbit + (maxOrbit - minOrbit) * (Math.sqrt(p.au) - auMin) / (auMax - auMin);
-  p.speed = baseSpeed / p.period;
-});
 const earthSpinSpeed = baseSpeed * EARTH_SPINS_PER_ORBIT;
 
-const marsOrbitR = planets.find(p => p.name === 'Mars').orbitR;
-const innerZoom = (cx - 90) / marsOrbitR;
+const planets = SolarData.PLANETS.map(p => ({ ...p, baseSize: ORBIT_SIZES[p.name], speed: baseSpeed / p.period }));
+const auMin = Math.sqrt(planets[0].au), auMax = Math.sqrt(planets[planets.length - 1].au);
+
+let W, H, cx, cy, sunR, minOrbit, maxOrbit, innerZoom;
+
+function layout(k) {
+  sunR = 30 * k;
+  minOrbit = 55 * k;
+  maxOrbit = 330 * k;
+  planets.forEach(p => {
+    p.size = p.baseSize * k;
+    p.orbitR = minOrbit + (maxOrbit - minOrbit) * (Math.sqrt(p.au) - auMin) / (auMax - auMin);
+  });
+  const marsOrbitR = planets.find(p => p.name === 'Mars').orbitR;
+  innerZoom = (cx - 90 * k) / marsOrbitR;
+}
+
+SolarUI.setupResponsiveCanvas(canvas,
+  (iw, ih) => {
+    const size = Math.floor(Math.min(iw * 0.94, ih * 0.85, 900));
+    return { width: size, height: size };
+  },
+  (w, h) => {
+    W = w; H = h;
+    cx = W / 2; cy = H / 2;
+    layout(W / BASE);
+  });
 
 let clock = 0;
 let playing = true;
@@ -104,18 +82,6 @@ let lastMouseAngle = 0;
 let downPos = null;
 let focused = null;
 let zoom = 1;
-
-function clientToCanvas(clientX, clientY) {
-  const rect = canvas.getBoundingClientRect();
-  const scale = W / rect.width;
-  return { x: (clientX - rect.left) * scale, y: (clientY - rect.top) * scale };
-}
-
-function canvasToClient(x, y) {
-  const rect = canvas.getBoundingClientRect();
-  const scale = rect.width / W;
-  return { x: rect.left + x * scale, y: rect.top + y * scale };
-}
 
 function screenToModel(sx, sy) {
   return { x: cx + (sx - cx) / zoom, y: cy + (sy - cy) / zoom };
@@ -204,7 +170,7 @@ function draw() {
   ctx.scale(zoom, zoom);
   ctx.translate(-cx, -cy);
 
-  PlanetArt.drawSun(ctx, cx, cy, 30);
+  PlanetArt.drawSun(ctx, cx, cy, sunR);
 
   planets.forEach(drawPlanet);
   ctx.restore();
@@ -226,10 +192,12 @@ function planetUnderMouse(mx, my) {
 
 function showBubble(p) {
   focused = p;
+  const fact = p.facts[Math.floor(Math.random() * p.facts.length)];
   bubble.querySelector('.name').textContent = p.name;
-  bubble.querySelector('.text').textContent = p.facts[Math.floor(Math.random() * p.facts.length)];
+  bubble.querySelector('.text').textContent = fact;
+  SolarUI.speak(`${p.name}. ${fact}`);
   const screenPos = modelToScreen(p._pos.x, p._pos.y);
-  const pos = canvasToClient(screenPos.x, screenPos.y);
+  const pos = SolarUI.canvasToClient(canvas, W, screenPos.x, screenPos.y);
   bubble.style.left = Math.min(pos.x + 20, window.innerWidth - 280) + 'px';
   bubble.style.top = Math.max(pos.y - 60, 10) + 'px';
   bubble.style.display = 'block';
@@ -243,7 +211,7 @@ function hideBubble() {
 }
 
 canvas.addEventListener('pointerdown', (e) => {
-  const c = clientToCanvas(e.clientX, e.clientY);
+  const c = SolarUI.clientToCanvas(canvas, W, e.clientX, e.clientY);
   const { x: mx, y: my } = screenToModel(c.x, c.y);
   downPos = { x: mx, y: my };
   const p = planetUnderMouse(mx, my);
@@ -256,7 +224,7 @@ canvas.addEventListener('pointerdown', (e) => {
 
 canvas.addEventListener('pointermove', (e) => {
   if (!dragTarget) return;
-  const c = clientToCanvas(e.clientX, e.clientY);
+  const c = SolarUI.clientToCanvas(canvas, W, e.clientX, e.clientY);
   const { x: mx, y: my } = screenToModel(c.x, c.y);
   const a = angleAt(mx, my);
   let delta = a - lastMouseAngle;
@@ -269,7 +237,7 @@ canvas.addEventListener('pointermove', (e) => {
 
 canvas.addEventListener('pointerup', (e) => {
   if (dragTarget && downPos) {
-    const c = clientToCanvas(e.clientX, e.clientY);
+    const c = SolarUI.clientToCanvas(canvas, W, e.clientX, e.clientY);
     const { x: mx, y: my } = screenToModel(c.x, c.y);
     const moved = Math.hypot(mx - downPos.x, my - downPos.y);
     if (moved < 4) {
@@ -283,7 +251,7 @@ canvas.addEventListener('pointercancel', () => { dragTarget = null; downPos = nu
 
 canvas.addEventListener('click', (e) => {
   if (dragTarget) return;
-  const c = clientToCanvas(e.clientX, e.clientY);
+  const c = SolarUI.clientToCanvas(canvas, W, e.clientX, e.clientY);
   const { x: mx, y: my } = screenToModel(c.x, c.y);
   if (!planetUnderMouse(mx, my)) hideBubble();
 });

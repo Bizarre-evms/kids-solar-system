@@ -7,7 +7,7 @@
 <style>
   html,body{margin:0;height:100%;background:#05061a;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Comic Sans MS',sans-serif;overflow:hidden}
   #label{font-size:44px;color:#fff;margin-bottom:6px;text-shadow:0 0 10px rgba(255,255,255,0.3)}
-  canvas{border-radius:16px;touch-action:none}
+  canvas{border-radius:16px;touch-action:none;max-width:100%;max-height:100%}
   #hint{color:#9aa;font-size:16px;margin-top:8px;text-align:center;max-width:600px}
   #controls{position:fixed;top:14px;left:14px}
   button{padding:8px 16px;font-size:16px;border-radius:10px;border:none;cursor:pointer;background:#ffd93d;font-weight:bold;margin-right:6px}
@@ -17,22 +17,36 @@
 <body>
 <div id="controls"><a id="home" href="index.html">🏠</a><button id="playBtn">⏸ Pause</button></div>
 <div id="label">☀️ Summer!</div>
-<canvas id="c" width="720" height="720"></canvas>
+<canvas id="c"></canvas>
 <div id="hint">Earth leans over — it never stands up straight! Drag Earth around the sun and watch the seasons change, even though Earth never gets closer or farther away.</div>
 <script src="assets.js"></script>
+<script src="ui.js"></script>
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const label = document.getElementById('label');
 const playBtn = document.getElementById('playBtn');
-const W = canvas.width, H = canvas.height;
-const cx = W/2, cy = H/2;
 
-const orbitR = 260;
-const earthR = 55;
+const BASE = 720; // design size everything below is tuned for; scaled by k on resize
 const TILT = 23.5 * Math.PI / 180;
 const northPoleDir = -Math.PI/2 + TILT; // fixed forever — this direction never turns to face the sun
 const houseDir = northPoleDir + (35 * Math.PI / 180); // a mid-latitude spot, fixed relative to the axis
+
+let W, H, cx, cy, orbitR, earthR, sunR;
+
+SolarUI.setupResponsiveCanvas(canvas,
+  (iw, ih) => {
+    const size = Math.floor(Math.min(iw * 0.94, ih * 0.85, 900));
+    return { width: size, height: size };
+  },
+  (w, h) => {
+    W = w; H = h;
+    cx = W / 2; cy = H / 2;
+    const k = W / BASE;
+    orbitR = 260 * k;
+    earthR = 55 * k;
+    sunR = 38 * k;
+  });
 
 let earthAngle = 0;
 let playing = true;
@@ -57,10 +71,7 @@ function getSeason(earthX, earthY) {
 }
 
 function angleAt(clientX, clientY) {
-  const rect = canvas.getBoundingClientRect();
-  const scale = W / rect.width;
-  const x = (clientX - rect.left) * scale;
-  const y = (clientY - rect.top) * scale;
+  const { x, y } = SolarUI.clientToCanvas(canvas, W, clientX, clientY);
   return Math.atan2(y - cy, x - cx);
 }
 
@@ -75,7 +86,7 @@ function draw() {
   ctx.arc(cx, cy, orbitR, 0, Math.PI*2);
   ctx.stroke();
 
-  PlanetArt.drawSun(ctx, cx, cy, 38);
+  PlanetArt.drawSun(ctx, cx, cy, sunR);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
@@ -115,19 +126,19 @@ function draw() {
   ctx.lineTo(axisX2, axisY2);
   ctx.stroke();
   ctx.fillStyle = '#fff';
-  ctx.font = 'bold 16px sans-serif';
-  ctx.fillText('N', axisX2, axisY2 - 12);
+  ctx.font = `bold ${earthR * 0.29}px sans-serif`;
+  ctx.fillText('N', axisX2, axisY2 - earthR * 0.22);
 
   // house + ground patch, fixed relative to the axis
   const hx = earthX + Math.cos(houseDir) * earthR * 0.72;
   const hy = earthY + Math.sin(houseDir) * earthR * 0.72;
   ctx.fillStyle = season.ground;
   ctx.beginPath();
-  ctx.arc(hx, hy, 22, 0, Math.PI*2);
+  ctx.arc(hx, hy, earthR * 0.4, 0, Math.PI*2);
   ctx.fill();
-  ctx.font = '22px serif';
-  ctx.fillText('🏠', hx - 12, hy);
-  ctx.fillText(season.tree, hx + 14, hy);
+  ctx.font = `${earthR * 0.4}px serif`;
+  ctx.fillText('🏠', hx - earthR * 0.22, hy);
+  ctx.fillText(season.tree, hx + earthR * 0.25, hy);
 
   label.textContent = `${season.emoji} ${season.name}!`;
 }
