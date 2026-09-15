@@ -23,9 +23,15 @@ or serve the folder locally:
 python3 -m http.server
 ```
 
+Serving over `http://` rather than opening the file directly also gives
+better text-to-speech voice quality in Chrome, which restricts its
+higher-quality network voices on `file://` pages.
+
 ## Structure
 
 - `index.html` — home screen with links to each scene
+- `data.js` — canonical planet dataset (size, distance, orbital period, color, moons, facts) shared by every scene
+- `ui.js` — shared helpers: text-to-speech, scale-correct pointer/canvas coordinates, responsive canvas sizing
 - `assets.js` — shared helper that composites a shaded sphere sprite with each planet's color
 - `assets/web/` — CC0 sprite textures from [Kenney's Planets pack](https://kenney.nl/assets/planets)
 - `PLAN.md` — what's built and what's next
