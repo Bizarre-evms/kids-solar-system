@@ -2,10 +2,11 @@
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Spin &amp; Orbit</title>
 <style>
   html,body{margin:0;height:100%;background:#05061a;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Comic Sans MS',sans-serif;overflow:hidden}
-  canvas{border-radius:16px}
+  canvas{border-radius:16px;touch-action:none}
   #hint{color:#9aa;font-size:16px;margin-top:8px}
   #controls{position:fixed;top:14px;left:14px}
   button{padding:8px 16px;font-size:16px;border-radius:10px;border:none;cursor:pointer;background:#ffd93d;font-weight:bold;margin-right:6px}
@@ -103,6 +104,18 @@ let lastMouseAngle = 0;
 let downPos = null;
 let focused = null;
 let zoom = 1;
+
+function clientToCanvas(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const scale = W / rect.width;
+  return { x: (clientX - rect.left) * scale, y: (clientY - rect.top) * scale };
+}
+
+function canvasToClient(x, y) {
+  const rect = canvas.getBoundingClientRect();
+  const scale = rect.width / W;
+  return { x: rect.left + x * scale, y: rect.top + y * scale };
+}
 
 function screenToModel(sx, sy) {
   return { x: cx + (sx - cx) / zoom, y: cy + (sy - cy) / zoom };
@@ -206,7 +219,7 @@ function planetUnderMouse(mx, my) {
     const pos = p._pos;
     if (!pos) continue;
     const d = Math.hypot(mx - pos.x, my - pos.y);
-    if (d <= p.size + 8) return p;
+    if (d <= Math.max(p.size + 8, 22)) return p;
   }
   return null;
 }
@@ -215,10 +228,10 @@ function showBubble(p) {
   focused = p;
   bubble.querySelector('.name').textContent = p.name;
   bubble.querySelector('.text').textContent = p.facts[Math.floor(Math.random() * p.facts.length)];
-  const pos = modelToScreen(p._pos.x, p._pos.y);
-  const rect = canvas.getBoundingClientRect();
-  bubble.style.left = Math.min(rect.left + pos.x + 20, window.innerWidth - 280) + 'px';
-  bubble.style.top = Math.max(rect.top + pos.y - 60, 10) + 'px';
+  const screenPos = modelToScreen(p._pos.x, p._pos.y);
+  const pos = canvasToClient(screenPos.x, screenPos.y);
+  bubble.style.left = Math.min(pos.x + 20, window.innerWidth - 280) + 'px';
+  bubble.style.top = Math.max(pos.y - 60, 10) + 'px';
   bubble.style.display = 'block';
   playing = false;
   playBtn.textContent = '▶ Play';
@@ -229,21 +242,22 @@ function hideBubble() {
   bubble.style.display = 'none';
 }
 
-canvas.addEventListener('mousedown', (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const { x: mx, y: my } = screenToModel(e.clientX - rect.left, e.clientY - rect.top);
+canvas.addEventListener('pointerdown', (e) => {
+  const c = clientToCanvas(e.clientX, e.clientY);
+  const { x: mx, y: my } = screenToModel(c.x, c.y);
   downPos = { x: mx, y: my };
   const p = planetUnderMouse(mx, my);
   if (p) {
     dragTarget = p;
+    canvas.setPointerCapture(e.pointerId);
     lastMouseAngle = angleAt(mx, my);
   }
 });
 
-window.addEventListener('mousemove', (e) => {
+canvas.addEventListener('pointermove', (e) => {
   if (!dragTarget) return;
-  const rect = canvas.getBoundingClientRect();
-  const { x: mx, y: my } = screenToModel(e.clientX - rect.left, e.clientY - rect.top);
+  const c = clientToCanvas(e.clientX, e.clientY);
+  const { x: mx, y: my } = screenToModel(c.x, c.y);
   const a = angleAt(mx, my);
   let delta = a - lastMouseAngle;
   if (delta > Math.PI) delta -= Math.PI*2;
@@ -253,10 +267,10 @@ window.addEventListener('mousemove', (e) => {
   hideBubble();
 });
 
-window.addEventListener('mouseup', (e) => {
+canvas.addEventListener('pointerup', (e) => {
   if (dragTarget && downPos) {
-    const rect = canvas.getBoundingClientRect();
-    const { x: mx, y: my } = screenToModel(e.clientX - rect.left, e.clientY - rect.top);
+    const c = clientToCanvas(e.clientX, e.clientY);
+    const { x: mx, y: my } = screenToModel(c.x, c.y);
     const moved = Math.hypot(mx - downPos.x, my - downPos.y);
     if (moved < 4) {
       showBubble(dragTarget);
@@ -265,11 +279,12 @@ window.addEventListener('mouseup', (e) => {
   dragTarget = null;
   downPos = null;
 });
+canvas.addEventListener('pointercancel', () => { dragTarget = null; downPos = null; });
 
 canvas.addEventListener('click', (e) => {
   if (dragTarget) return;
-  const rect = canvas.getBoundingClientRect();
-  const { x: mx, y: my } = screenToModel(e.clientX - rect.left, e.clientY - rect.top);
+  const c = clientToCanvas(e.clientX, e.clientY);
+  const { x: mx, y: my } = screenToModel(c.x, c.y);
   if (!planetUnderMouse(mx, my)) hideBubble();
 });
 

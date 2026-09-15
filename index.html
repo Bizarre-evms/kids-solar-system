@@ -2,11 +2,12 @@
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Spin &amp; Orbit</title>
 <style>
   html,body{margin:0;height:100%;background:radial-gradient(circle at 50% 30%, #1a1f4d, #05061a);display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Comic Sans MS',sans-serif;overflow:hidden}
   h1{color:#fff;font-size:38px;margin-bottom:40px;text-shadow:0 0 12px rgba(255,255,255,0.4)}
-  #cards{display:flex;gap:40px}
+  #cards{display:flex;flex-wrap:wrap;justify-content:center;gap:32px;max-width:920px}
   a.card{text-decoration:none;width:220px;height:220px;border-radius:30px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:transform .15s;box-shadow:0 8px 24px rgba(0,0,0,0.4)}
   a.card:active{transform:scale(0.94)}
   #planetsCard{background:radial-gradient(circle at 35% 35%, #e0a0e8, #8a4a9e)}
@@ -15,9 +16,10 @@
   #seasonsCard{background:radial-gradient(circle at 35% 35%, #8fd18f, #4a8f4a)}
   .emoji{font-size:70px}
   .title{font-size:26px;font-weight:bold;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.4)}
-  @media (max-width: 520px) {
-    #cards{flex-direction:column;gap:24px}
-    a.card{width:260px;height:180px}
+  @media (max-width: 560px) {
+    a.card{width:150px;height:150px}
+    .emoji{font-size:50px}
+    .title{font-size:20px}
   }
 </style>
 </head>

@@ -2,11 +2,12 @@
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Day and Night POC</title>
 <style>
   html,body{margin:0;height:100%;background:#0b0f2b;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Comic Sans MS',sans-serif;overflow:hidden}
   #label{font-size:48px;color:#fff;margin-bottom:10px;transition:opacity .3s}
-  canvas{border-radius:20px;max-width:100%;max-height:100%}
+  canvas{border-radius:20px;max-width:100%;max-height:100%;touch-action:none}
   #hint{color:#aaa;font-size:18px;margin-top:14px}
   a#home{position:fixed;top:16px;left:16px;font-size:28px;text-decoration:none;background:#fff2;border-radius:12px;padding:6px 12px}
 </style>
@@ -142,19 +143,21 @@ function angleAt(x, y) {
   return Math.atan2((y - rect.top) * scale - cy, (x - rect.left) * scale - cx);
 }
 
-canvas.addEventListener('mousedown', (e) => {
+canvas.addEventListener('pointerdown', (e) => {
   autoSpin = false;
   dragging = true;
+  canvas.setPointerCapture(e.pointerId);
   lastMouseAngle = angleAt(e.clientX, e.clientY);
 });
-window.addEventListener('mousemove', (e) => {
+canvas.addEventListener('pointermove', (e) => {
   if (!dragging) return;
   const a = angleAt(e.clientX, e.clientY);
   angle += a - lastMouseAngle;
   lastMouseAngle = a;
   drawScene();
 });
-window.addEventListener('mouseup', () => { dragging = false; });
+canvas.addEventListener('pointerup', () => { dragging = false; });
+canvas.addEventListener('pointercancel', () => { dragging = false; });
 
 function loop() {
   if (autoSpin) {
