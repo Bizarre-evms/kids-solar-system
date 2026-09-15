@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Spin &amp; Orbit</title>
+<style>
+  html,body{margin:0;height:100%;background:#05061a;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Comic Sans MS',sans-serif;overflow:hidden}
+  canvas{border-radius:16px}
+  #hint{color:#9aa;font-size:16px;margin-top:8px}
+  #controls{position:fixed;top:14px;left:14px}
+  button{padding:8px 16px;font-size:16px;border-radius:10px;border:none;cursor:pointer;background:#ffd93d;font-weight:bold;margin-right:6px}
+  button.speed.active{background:#fff;box-shadow:0 0 0 3px #ffd93d inset}
+  a#home{font-size:28px;text-decoration:none;background:#fff2;border-radius:12px;padding:6px 12px;margin-right:10px}
+  #bubble{position:fixed;background:#fff;border-radius:16px;padding:14px 20px;font-size:20px;max-width:260px;box-shadow:0 4px 20px rgba(0,0,0,0.4);display:none;text-align:center}
+  #bubble .name{font-size:24px;font-weight:bold;margin-bottom:6px}
+</style>
+</head>
+<body>
+<div id="controls">
+  <a id="home" href="index.html">🏠</a>
+  <button id="playBtn">⏸ Pause</button>
+  <button class="speed active" data-speed="1">1x</button>
+  <button class="speed" data-speed="2">2x</button>
+  <button class="speed" data-speed="4">4x</button>
+  <button class="speed" data-speed="10">10x</button>
+  <button class="speed" data-speed="20">20x</button>
+  <button id="zoomBtn">🔍 Zoom: Inner</button>
+</div>
+<canvas id="c" width="720" height="720"></canvas>
+<div id="hint">Drag any planet to move it — watch what happens to the others! Tap a planet for a fact.</div>
+<div id="bubble"><div class="name"></div><div class="text"></div></div>
+<script src="assets.js"></script>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const bubble = document.getElementById('bubble');
+const playBtn = document.getElementById('playBtn');
+const W = canvas.width, H = canvas.height;
+const cx = W/2, cy = H/2;
+
+const EARTH_ORBIT_FRAMES = 480; // frames for one Earth orbit at normal speed
+const baseSpeed = (2 * Math.PI) / EARTH_ORBIT_FRAMES; // rad/frame for Earth
+const EARTH_SPINS_PER_ORBIT = 6;
+
+const planets = [
+  { name: 'Mercury', au: 0.39, period: 0.24, size: 6,  color: '#b5a49a', facts: [
+    "I'm the fastest! I zoom all the way around the sun in no time.",
+    "I'm the smallest planet of all!",
+    "I don't have any moons.",
+  ] },
+  { name: 'Venus',   au: 0.72, period: 0.62, size: 10, color: '#e8c27a', facts: [
+    "I'm the hottest planet — even hotter than Mercury!",
+    "I spin backwards compared to most planets!",
+    "I'm the brightest thing in our night sky, other than the Moon.",
+  ] },
+  { name: 'Earth',   au: 1.0,  period: 1.0,  size: 11, color: '#4a90d9', isEarth: true, facts: [
+    "I'm home! I spin around and around while I travel around the sun.",
+    "I'm the only planet with lots of liquid water on top!",
+    "I have one moon that circles around me.",
+  ] },
+  { name: 'Mars',    au: 1.52, period: 1.88, size: 8,  color: '#c1440e', facts: [
+    "I'm red and dusty!",
+    "I have the tallest mountain in the whole solar system!",
+    "I have two tiny moons, Phobos and Deimos.",
+  ] },
+  { name: 'Jupiter', au: 5.20, period: 11.86,size: 24, color: '#d9a066', facts: [
+    "I'm the biggest planet of all!",
+    "I have a giant storm bigger than Earth called the Great Red Spot!",
+    "I have dozens and dozens of moons!",
+  ] },
+  { name: 'Saturn',  au: 9.58, period: 29.4, size: 21, color: '#e8d5a0', hasRings: true, facts: [
+    "Look at my beautiful rings!",
+    "My rings are made of ice and rock!",
+    "I'm so light I could float in a giant bathtub!",
+  ] },
+  { name: 'Uranus',  au: 19.2, period: 83.7, size: 15, color: '#9fd9d9', facts: [
+    "I spin on my side, like a rolling ball!",
+    "I'm an icy blue-green color!",
+    "I have rings too, just like Saturn — they're just harder to see!",
+  ] },
+  { name: 'Neptune', au: 30.05,period:163.7, size: 15, color: '#4166f5', facts: [
+    "I'm icy, windy, and very far away!",
+    "I have the strongest winds of any planet!",
+    "I take 165 Earth years to go around the sun once!",
+  ] },
+];
+
+const minOrbit = 55, maxOrbit = 330;
+const auMin = Math.sqrt(planets[0].au), auMax = Math.sqrt(planets[planets.length-1].au);
+planets.forEach(p => {
+  p.orbitR = minOrbit + (maxOrbit - minOrbit) * (Math.sqrt(p.au) - auMin) / (auMax - auMin);
+  p.speed = baseSpeed / p.period;
+});
+const earthSpinSpeed = baseSpeed * EARTH_SPINS_PER_ORBIT;
+
+const marsOrbitR = planets.find(p => p.name === 'Mars').orbitR;
+const innerZoom = (cx - 90) / marsOrbitR;
+
+let clock = 0;
+let playing = true;
+let dragTarget = null;
+let lastMouseAngle = 0;
+let downPos = null;
+let focused = null;
+let zoom = 1;
+
+function screenToModel(sx, sy) {
+  return { x: cx + (sx - cx) / zoom, y: cy + (sy - cy) / zoom };
+}
+
+function modelToScreen(mx, my) {
+  return { x: cx + (mx - cx) * zoom, y: cy + (my - cy) * zoom };
+}
+
+function planetPos(p) {
+  const a = clock * p.speed;
+  return { x: cx + Math.cos(a) * p.orbitR, y: cy + Math.sin(a) * p.orbitR, angle: a };
+}
+
+function drawOrbitRing(p) {
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(cx, cy, p.orbitR, 0, Math.PI*2);
+  ctx.stroke();
+}
+
+function drawEarth(p, pos) {
+  const sunDirAngle = Math.atan2(cy - pos.y, cx - pos.x);
+  const nightCenter = sunDirAngle + Math.PI;
+  const spinAngle = clock * earthSpinSpeed;
+
+  PlanetArt.drawSphere(ctx, pos.x, pos.y, p.size, p.color);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(pos.x, pos.y, p.size, 0, Math.PI*2);
+  ctx.clip();
+
+  ctx.fillStyle = 'rgba(10,10,40,0.75)';
+  ctx.beginPath();
+  ctx.arc(pos.x, pos.y, p.size, nightCenter - Math.PI/2, nightCenter + Math.PI/2);
+  ctx.fill();
+  ctx.restore();
+
+  // house icon riding the surface, showing rotation
+  const houseAngle = spinAngle - Math.PI/2;
+  const hx = pos.x + Math.cos(houseAngle) * p.size * 0.6;
+  const hy = pos.y + Math.sin(houseAngle) * p.size * 0.6;
+  ctx.font = `${Math.max(8, p.size*0.7)}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🏠', hx, hy);
+}
+
+function drawPlanet(p) {
+  const pos = planetPos(p);
+  p._pos = pos;
+  drawOrbitRing(p);
+
+  if (p.hasRings) {
+    ctx.strokeStyle = '#c9b48a';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(pos.x, pos.y, p.size*1.7, p.size*0.6, 0.4, 0, Math.PI*2);
+    ctx.stroke();
+  }
+
+  if (p.isEarth) {
+    drawEarth(p, pos);
+  } else {
+    PlanetArt.drawSphere(ctx, pos.x, pos.y, p.size, p.color);
+  }
+
+  if (focused === p) {
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, p.size + 6, 0, Math.PI*2);
+    ctx.stroke();
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#05061a';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(zoom, zoom);
+  ctx.translate(-cx, -cy);
+
+  PlanetArt.drawSun(ctx, cx, cy, 30);
+
+  planets.forEach(drawPlanet);
+  ctx.restore();
+}
+
+function angleAt(x, y) {
+  return Math.atan2(y - cy, x - cx);
+}
+
+function planetUnderMouse(mx, my) {
+  for (const p of planets) {
+    const pos = p._pos;
+    if (!pos) continue;
+    const d = Math.hypot(mx - pos.x, my - pos.y);
+    if (d <= p.size + 8) return p;
+  }
+  return null;
+}
+
+function showBubble(p) {
+  focused = p;
+  bubble.querySelector('.name').textContent = p.name;
+  bubble.querySelector('.text').textContent = p.facts[Math.floor(Math.random() * p.facts.length)];
+  const pos = modelToScreen(p._pos.x, p._pos.y);
+  const rect = canvas.getBoundingClientRect();
+  bubble.style.left = Math.min(rect.left + pos.x + 20, window.innerWidth - 280) + 'px';
+  bubble.style.top = Math.max(rect.top + pos.y - 60, 10) + 'px';
+  bubble.style.display = 'block';
+  playing = false;
+  playBtn.textContent = '▶ Play';
+}
+
+function hideBubble() {
+  focused = null;
+  bubble.style.display = 'none';
+}
+
+canvas.addEventListener('mousedown', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const { x: mx, y: my } = screenToModel(e.clientX - rect.left, e.clientY - rect.top);
+  downPos = { x: mx, y: my };
+  const p = planetUnderMouse(mx, my);
+  if (p) {
+    dragTarget = p;
+    lastMouseAngle = angleAt(mx, my);
+  }
+});
+
+window.addEventListener('mousemove', (e) => {
+  if (!dragTarget) return;
+  const rect = canvas.getBoundingClientRect();
+  const { x: mx, y: my } = screenToModel(e.clientX - rect.left, e.clientY - rect.top);
+  const a = angleAt(mx, my);
+  let delta = a - lastMouseAngle;
+  if (delta > Math.PI) delta -= Math.PI*2;
+  if (delta < -Math.PI) delta += Math.PI*2;
+  clock += delta / dragTarget.speed;
+  lastMouseAngle = a;
+  hideBubble();
+});
+
+window.addEventListener('mouseup', (e) => {
+  if (dragTarget && downPos) {
+    const rect = canvas.getBoundingClientRect();
+    const { x: mx, y: my } = screenToModel(e.clientX - rect.left, e.clientY - rect.top);
+    const moved = Math.hypot(mx - downPos.x, my - downPos.y);
+    if (moved < 4) {
+      showBubble(dragTarget);
+    }
+  }
+  dragTarget = null;
+  downPos = null;
+});
+
+canvas.addEventListener('click', (e) => {
+  if (dragTarget) return;
+  const rect = canvas.getBoundingClientRect();
+  const { x: mx, y: my } = screenToModel(e.clientX - rect.left, e.clientY - rect.top);
+  if (!planetUnderMouse(mx, my)) hideBubble();
+});
+
+playBtn.addEventListener('click', () => {
+  playing = !playing;
+  playBtn.textContent = playing ? '⏸ Pause' : '▶ Play';
+  if (playing) hideBubble();
+});
+
+let speedMultiplier = 1;
+document.querySelectorAll('button.speed').forEach(btn => {
+  btn.addEventListener('click', () => {
+    speedMultiplier = Number(btn.dataset.speed);
+    document.querySelectorAll('button.speed').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+const zoomBtn = document.getElementById('zoomBtn');
+zoomBtn.addEventListener('click', () => {
+  zoom = zoom === 1 ? innerZoom : 1;
+  zoomBtn.textContent = zoom === 1 ? '🔍 Zoom: Inner' : '🔭 Zoom: Full';
+});
+
+function loop() {
+  if (playing) clock += baseSpeed * speedMultiplier;
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

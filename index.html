@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Spin &amp; Orbit</title>
+<style>
+  html,body{margin:0;height:100%;background:radial-gradient(circle at 50% 30%, #1a1f4d, #05061a);display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Comic Sans MS',sans-serif;overflow:hidden}
+  h1{color:#fff;font-size:38px;margin-bottom:40px;text-shadow:0 0 12px rgba(255,255,255,0.4)}
+  #cards{display:flex;gap:40px}
+  a.card{text-decoration:none;width:220px;height:220px;border-radius:30px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:transform .15s;box-shadow:0 8px 24px rgba(0,0,0,0.4)}
+  a.card:active{transform:scale(0.94)}
+  #spinCard{background:radial-gradient(circle at 35% 35%, #6bb0ea, #2c5f8a)}
+  #orbitCard{background:radial-gradient(circle at 35% 35%, #ffd93d, #d99a2b)}
+  #seasonsCard{background:radial-gradient(circle at 35% 35%, #8fd18f, #4a8f4a)}
+  .emoji{font-size:70px}
+  .title{font-size:26px;font-weight:bold;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.4)}
+  @media (max-width: 520px) {
+    #cards{flex-direction:column;gap:24px}
+    a.card{width:260px;height:180px}
+  }
+</style>
+</head>
+<body>
+<h1>🌌 Spin &amp; Orbit</h1>
+<div id="cards">
+  <a class="card" id="spinCard" href="spin.html">
+    <div class="emoji">🌍</div>
+    <div class="title">Spin!</div>
+  </a>
+  <a class="card" id="orbitCard" href="orbit.html">
+    <div class="emoji">☀️</div>
+    <div class="title">Orbit!</div>
+  </a>
+  <a class="card" id="seasonsCard" href="seasons.html">
+    <div class="emoji">🍂</div>
+    <div class="title">Seasons!</div>
+  </a>
+</div>
+</body>
+</html>

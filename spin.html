@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Day and Night POC</title>
+<style>
+  html,body{margin:0;height:100%;background:#0b0f2b;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Comic Sans MS',sans-serif;overflow:hidden}
+  #label{font-size:48px;color:#fff;margin-bottom:10px;transition:opacity .3s}
+  canvas{border-radius:20px;max-width:100%;max-height:100%}
+  #hint{color:#aaa;font-size:18px;margin-top:14px}
+  a#home{position:fixed;top:16px;left:16px;font-size:28px;text-decoration:none;background:#fff2;border-radius:12px;padding:6px 12px}
+</style>
+</head>
+<body>
+<a id="home" href="index.html">🏠</a>
+<div id="label">☀️ Day!</div>
+<canvas id="c"></canvas>
+<div id="hint">Tap and drag the Earth to spin it!</div>
+<script src="assets.js"></script>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const label = document.getElementById('label');
+
+let W, H, cx, cy, earthR, sunX, sunY, sunR, moonOrbitR, moonR;
+
+function resize() {
+  const size = Math.floor(Math.min(window.innerWidth * 0.94, window.innerHeight * 0.8));
+  W = H = size;
+  canvas.width = W;
+  canvas.height = H;
+  cx = W / 2;
+  cy = H / 2;
+  earthR = W * 0.18;
+  sunX = W * 0.1;
+  sunY = cy;
+  sunR = W * 0.09;
+  moonOrbitR = earthR + W * 0.09;
+  moonR = W * 0.028;
+}
+window.addEventListener('resize', resize);
+
+let angle = 0;
+let moonAngle = 0;
+let autoSpin = true;
+let dragging = false;
+let lastMouseAngle = 0;
+const moonSpeed = 0.0016; // slower than earth's spin, like the moon taking ~a month vs a day
+
+function drawScene() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#0b0f2b';
+  ctx.fillRect(0, 0, W, H);
+
+  // sun, fixed to the left
+  PlanetArt.drawSun(ctx, sunX, sunY, sunR);
+
+  // light cone: two true tangent lines from the sun to earth's circle
+  const d = Math.hypot(cx - sunX, cy - sunY);
+  const centerToSunAngle = Math.atan2(sunY - cy, sunX - cx);
+  const tangentOffset = Math.acos(earthR / d);
+  const tangentPoint1 = {
+    x: cx + earthR * Math.cos(centerToSunAngle + tangentOffset),
+    y: cy + earthR * Math.sin(centerToSunAngle + tangentOffset)
+  };
+  const tangentPoint2 = {
+    x: cx + earthR * Math.cos(centerToSunAngle - tangentOffset),
+    y: cy + earthR * Math.sin(centerToSunAngle - tangentOffset)
+  };
+  ctx.save();
+  const grad = ctx.createLinearGradient(sunX, sunY, cx, cy);
+  grad.addColorStop(0, 'rgba(255,217,61,0.35)');
+  grad.addColorStop(1, 'rgba(255,217,61,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(sunX, sunY);
+  ctx.lineTo(tangentPoint1.x, tangentPoint1.y);
+  ctx.lineTo(tangentPoint2.x, tangentPoint2.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,217,61,0.6)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(sunX, sunY);
+  ctx.lineTo(tangentPoint1.x, tangentPoint1.y);
+  ctx.moveTo(sunX, sunY);
+  ctx.lineTo(tangentPoint2.x, tangentPoint2.y);
+  ctx.stroke();
+  ctx.restore();
+
+  // earth surface: the sphere texture itself spins with 'angle'
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
+  PlanetArt.drawSphere(ctx, 0, 0, earthR, '#4a90d9');
+  ctx.restore();
+
+  // night shadow: fixed in space, facing away from the sun (does NOT rotate with earth)
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, earthR, 0, Math.PI*2);
+  ctx.clip();
+  ctx.fillStyle = 'rgba(10,10,40,0.75)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, earthR, -Math.PI/2, Math.PI/2);
+  ctx.fill();
+  ctx.restore();
+
+  // house icon that rotates with the earth's surface
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
+  ctx.font = `${Math.max(16, earthR*0.27)}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('🏠', 0, -earthR*0.5);
+  ctx.restore();
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(cx, cy, moonOrbitR, 0, Math.PI*2);
+  ctx.stroke();
+
+  const moonX = cx + Math.cos(moonAngle) * moonOrbitR;
+  const moonY = cy + Math.sin(moonAngle) * moonOrbitR;
+  PlanetArt.drawMoon(ctx, moonX, moonY, moonR);
+
+  updateLabel();
+}
+
+function updateLabel() {
+  // house sits at local (0, -earthR*0.5); rotating by 'angle' gives global x-offset (R/2)*sin(angle)
+  // night hemisphere is the fixed x > cx side (away from the sun on the left), so day = negative offset
+  const houseXOffset = Math.sin(angle);
+  label.textContent = houseXOffset < 0 ? '☀️ Day!' : '🌙 Night!';
+}
+
+function angleAt(x, y) {
+  const rect = canvas.getBoundingClientRect();
+  const scale = W / rect.width;
+  return Math.atan2((y - rect.top) * scale - cy, (x - rect.left) * scale - cx);
+}
+
+canvas.addEventListener('mousedown', (e) => {
+  autoSpin = false;
+  dragging = true;
+  lastMouseAngle = angleAt(e.clientX, e.clientY);
+});
+window.addEventListener('mousemove', (e) => {
+  if (!dragging) return;
+  const a = angleAt(e.clientX, e.clientY);
+  angle += a - lastMouseAngle;
+  lastMouseAngle = a;
+  drawScene();
+});
+window.addEventListener('mouseup', () => { dragging = false; });
+
+function loop() {
+  if (autoSpin) {
+    angle += 0.01;
+    moonAngle += moonSpeed;
+  }
+  drawScene();
+  requestAnimationFrame(loop);
+}
+resize();
+loop();
+</script>
+</body>
+</html>

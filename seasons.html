@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Seasons</title>
+<style>
+  html,body{margin:0;height:100%;background:#05061a;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Comic Sans MS',sans-serif;overflow:hidden}
+  #label{font-size:44px;color:#fff;margin-bottom:6px;text-shadow:0 0 10px rgba(255,255,255,0.3)}
+  canvas{border-radius:16px}
+  #hint{color:#9aa;font-size:16px;margin-top:8px;text-align:center;max-width:600px}
+  #controls{position:fixed;top:14px;left:14px}
+  button{padding:8px 16px;font-size:16px;border-radius:10px;border:none;cursor:pointer;background:#ffd93d;font-weight:bold;margin-right:6px}
+  a#home{font-size:28px;text-decoration:none;background:#fff2;border-radius:12px;padding:6px 12px;margin-right:10px}
+</style>
+</head>
+<body>
+<div id="controls"><a id="home" href="index.html">🏠</a><button id="playBtn">⏸ Pause</button></div>
+<div id="label">☀️ Summer!</div>
+<canvas id="c" width="720" height="720"></canvas>
+<div id="hint">Earth leans over — it never stands up straight! Drag Earth around the sun and watch the seasons change, even though Earth never gets closer or farther away.</div>
+<script src="assets.js"></script>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const label = document.getElementById('label');
+const playBtn = document.getElementById('playBtn');
+const W = canvas.width, H = canvas.height;
+const cx = W/2, cy = H/2;
+
+const orbitR = 260;
+const earthR = 55;
+const TILT = 23.5 * Math.PI / 180;
+const northPoleDir = -Math.PI/2 + TILT; // fixed forever — this direction never turns to face the sun
+const houseDir = northPoleDir + (35 * Math.PI / 180); // a mid-latitude spot, fixed relative to the axis
+
+let earthAngle = 0;
+let playing = true;
+let dragging = false;
+let lastMouseAngle = 0;
+
+const seasons = [
+  { name: 'Summer', emoji: '☀️', tree: '🌳', ground: '#e8c94a' },
+  { name: 'Autumn', emoji: '🍂', tree: '🍁', ground: '#c97b3d' },
+  { name: 'Winter', emoji: '❄️', tree: '⛄', ground: '#e8eef2' },
+  { name: 'Spring', emoji: '🌸', tree: '🌸', ground: '#8fd18f' },
+];
+
+function getSeason(earthX, earthY) {
+  const sunDirAngle = Math.atan2(cy - earthY, cx - earthX);
+  let diff = (sunDirAngle - houseDir) % (Math.PI * 2);
+  if (diff < 0) diff += Math.PI * 2;
+  const idx = Math.floor(diff / (Math.PI / 2));
+  return seasons[idx];
+}
+
+function angleAt(x, y) {
+  return Math.atan2(y - cy, x - cx);
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#05061a';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(cx, cy, orbitR, 0, Math.PI*2);
+  ctx.stroke();
+
+  PlanetArt.drawSun(ctx, cx, cy, 38);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const earthX = cx + Math.cos(earthAngle) * orbitR;
+  const earthY = cy + Math.sin(earthAngle) * orbitR;
+  const season = getSeason(earthX, earthY);
+
+  // light cone: true tangent lines from the sun to earth's circle
+  const d = Math.hypot(cx - earthX, cy - earthY);
+  const centerToSunAngle = Math.atan2(cy - earthY, cx - earthX);
+  const tangentOffset = Math.acos(earthR / d);
+  const t1 = { x: earthX + earthR * Math.cos(centerToSunAngle + tangentOffset), y: earthY + earthR * Math.sin(centerToSunAngle + tangentOffset) };
+  const t2 = { x: earthX + earthR * Math.cos(centerToSunAngle - tangentOffset), y: earthY + earthR * Math.sin(centerToSunAngle - tangentOffset) };
+  const grad = ctx.createLinearGradient(cx, cy, earthX, earthY);
+  grad.addColorStop(0, 'rgba(255,217,61,0.3)');
+  grad.addColorStop(1, 'rgba(255,217,61,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(t1.x, t1.y);
+  ctx.lineTo(t2.x, t2.y);
+  ctx.closePath();
+  ctx.fill();
+
+  // earth body
+  PlanetArt.drawSphere(ctx, earthX, earthY, earthR, '#4a90d9');
+
+  // axis stick — same fixed direction no matter where earth is
+  const axisX1 = earthX - Math.cos(northPoleDir) * earthR * 1.35;
+  const axisY1 = earthY - Math.sin(northPoleDir) * earthR * 1.35;
+  const axisX2 = earthX + Math.cos(northPoleDir) * earthR * 1.35;
+  const axisY2 = earthY + Math.sin(northPoleDir) * earthR * 1.35;
+  ctx.strokeStyle = '#ddd';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(axisX1, axisY1);
+  ctx.lineTo(axisX2, axisY2);
+  ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 16px sans-serif';
+  ctx.fillText('N', axisX2, axisY2 - 12);
+
+  // house + ground patch, fixed relative to the axis
+  const hx = earthX + Math.cos(houseDir) * earthR * 0.72;
+  const hy = earthY + Math.sin(houseDir) * earthR * 0.72;
+  ctx.fillStyle = season.ground;
+  ctx.beginPath();
+  ctx.arc(hx, hy, 22, 0, Math.PI*2);
+  ctx.fill();
+  ctx.font = '22px serif';
+  ctx.fillText('🏠', hx - 12, hy);
+  ctx.fillText(season.tree, hx + 14, hy);
+
+  label.textContent = `${season.emoji} ${season.name}!`;
+}
+
+canvas.addEventListener('mousedown', (e) => {
+  playing = false;
+  playBtn.textContent = '▶ Play';
+  dragging = true;
+  const rect = canvas.getBoundingClientRect();
+  lastMouseAngle = angleAt(e.clientX - rect.left, e.clientY - rect.top);
+});
+window.addEventListener('mousemove', (e) => {
+  if (!dragging) return;
+  const rect = canvas.getBoundingClientRect();
+  const a = angleAt(e.clientX - rect.left, e.clientY - rect.top);
+  let delta = a - lastMouseAngle;
+  if (delta > Math.PI) delta -= Math.PI*2;
+  if (delta < -Math.PI) delta += Math.PI*2;
+  earthAngle += delta;
+  lastMouseAngle = a;
+  draw();
+});
+window.addEventListener('mouseup', () => { dragging = false; });
+
+playBtn.addEventListener('click', () => {
+  playing = !playing;
+  playBtn.textContent = playing ? '⏸ Pause' : '▶ Play';
+});
+
+function loop() {
+  if (playing) earthAngle += 0.006;
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
