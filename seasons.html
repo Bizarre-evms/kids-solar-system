@@ -52,6 +52,7 @@ let earthAngle = 0;
 let playing = true;
 let dragging = false;
 let lastMouseAngle = 0;
+let lastSeasonName = null;
 
 const seasons = [
   { name: 'Summer', emoji: '☀️', tree: '🌳', ground: '#e8c94a' },
@@ -141,6 +142,10 @@ function draw() {
   ctx.fillText(season.tree, hx + earthR * 0.25, hy);
 
   label.textContent = `${season.emoji} ${season.name}!`;
+  if (season.name !== lastSeasonName) {
+    SolarUI.speak(season.name);
+    lastSeasonName = season.name;
+  }
 }
 
 canvas.addEventListener('pointerdown', (e) => {

@@ -10,10 +10,12 @@
   canvas{border-radius:16px;max-width:100%;max-height:100%;touch-action:none}
   #hint{color:#9aa;font-size:16px;margin-top:10px;text-align:center;max-width:600px}
   a#home{position:fixed;top:16px;left:16px;font-size:28px;text-decoration:none;background:#fff2;border-radius:12px;padding:6px 12px}
+  #scaleBtn{position:fixed;top:16px;right:16px;font-size:16px;padding:8px 16px;border-radius:12px;border:none;cursor:pointer;background:#ffd93d;font-weight:bold}
 </style>
 </head>
 <body>
 <a id="home" href="index.html">🏠</a>
+<button id="scaleBtn">🔍 True Sizes</button>
 <div id="label">Tap a planet!</div>
 <canvas id="c"></canvas>
 <div id="hint">The planets always line up in the same order, going out from the sun. Tap one to hear its name!</div>
@@ -30,10 +32,19 @@ const bodies = SolarData.ALL;
 const minR = 16, maxR = 78, sunR = 95;
 const diamMin = Math.sqrt(Math.min(...SolarData.PLANETS.map(b => b.diam)));
 const diamMax = Math.sqrt(Math.max(...SolarData.PLANETS.map(b => b.diam)));
+// true-scale uses Jupiter's ordered-view radius as the reference, so
+// Jupiter looks the same size in both modes and everything else (the Sun
+// included) scales linearly against it — the Sun is meant to overflow
+// the canvas here, that overflow is the point.
+const jupiter = SolarData.PLANETS.find(p => p.name === 'Jupiter');
+const trueScaleK = maxR / jupiter.diam;
 bodies.forEach(b => {
-  b.r = b.isSun ? sunR : minR + (maxR - minR) * (Math.sqrt(b.diam) - diamMin) / (diamMax - diamMin);
+  b.rOrdered = b.isSun ? sunR : minR + (maxR - minR) * (Math.sqrt(b.diam) - diamMin) / (diamMax - diamMin);
+  b.rTrue = Math.max(b.diam * trueScaleK, 3);
+  b.r = b.rOrdered;
 });
 
+let trueScale = false;
 let W, H, baseline;
 let highlighted = null;
 let highlightUntil = 0;
@@ -50,7 +61,6 @@ SolarUI.setupResponsiveCanvas(canvas,
     const slot = (W - margin * 2) / bodies.length;
     bodies.forEach((b, i) => {
       b.x = margin + slot * (i + 0.5);
-      b.y = baseline - b.r;
     });
   });
 
@@ -68,6 +78,9 @@ function draw() {
 
   const now = performance.now();
   bodies.forEach(b => {
+    const target = trueScale ? b.rTrue : b.rOrdered;
+    b.r += (target - b.r) * 0.08;
+
     const isHi = highlighted === b && now < highlightUntil;
     const r = isHi ? b.r * 1.12 : b.r;
     const y = baseline - r;
@@ -101,7 +114,7 @@ function draw() {
 function bodyAt(x, y) {
   for (const b of bodies) {
     const by = baseline - b.r;
-    const hitR = Math.max(b.r + 10, 26);
+    const hitR = Math.max(Math.min(b.r, b.rOrdered) + 10, 26);
     if (Math.hypot(x - b.x, y - by) <= hitR) return b;
   }
   return null;
@@ -117,6 +130,11 @@ canvas.addEventListener('click', (e) => {
   label.textContent = b.name + '!';
   const fact = b.facts[Math.floor(Math.random() * b.facts.length)];
   setTimeout(() => { label.textContent = fact; }, 900);
+});
+
+document.getElementById('scaleBtn').addEventListener('click', () => {
+  trueScale = !trueScale;
+  document.getElementById('scaleBtn').textContent = trueScale ? '📏 Ordered View' : '🔍 True Sizes';
 });
 
 draw();

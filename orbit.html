@@ -44,8 +44,6 @@ const ORBIT_SIZES = { Mercury: 6, Venus: 10, Earth: 11, Mars: 8, Jupiter: 24, Sa
 
 const EARTH_ORBIT_FRAMES = 480; // frames for one Earth orbit at normal speed
 const baseSpeed = (2 * Math.PI) / EARTH_ORBIT_FRAMES; // rad/frame for Earth
-const EARTH_SPINS_PER_ORBIT = 6;
-const earthSpinSpeed = baseSpeed * EARTH_SPINS_PER_ORBIT;
 
 const planets = SolarData.PLANETS.map(p => ({ ...p, baseSize: ORBIT_SIZES[p.name], speed: baseSpeed / p.period }));
 const auMin = Math.sqrt(planets[0].au), auMax = Math.sqrt(planets[planets.length - 1].au);
@@ -104,34 +102,6 @@ function drawOrbitRing(p) {
   ctx.stroke();
 }
 
-function drawEarth(p, pos) {
-  const sunDirAngle = Math.atan2(cy - pos.y, cx - pos.x);
-  const nightCenter = sunDirAngle + Math.PI;
-  const spinAngle = clock * earthSpinSpeed;
-
-  PlanetArt.drawSphere(ctx, pos.x, pos.y, p.size, p.color);
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(pos.x, pos.y, p.size, 0, Math.PI*2);
-  ctx.clip();
-
-  ctx.fillStyle = 'rgba(10,10,40,0.75)';
-  ctx.beginPath();
-  ctx.arc(pos.x, pos.y, p.size, nightCenter - Math.PI/2, nightCenter + Math.PI/2);
-  ctx.fill();
-  ctx.restore();
-
-  // house icon riding the surface, showing rotation
-  const houseAngle = spinAngle - Math.PI/2;
-  const hx = pos.x + Math.cos(houseAngle) * p.size * 0.6;
-  const hy = pos.y + Math.sin(houseAngle) * p.size * 0.6;
-  ctx.font = `${Math.max(8, p.size*0.7)}px serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('🏠', hx, hy);
-}
-
 function drawPlanet(p) {
   const pos = planetPos(p);
   p._pos = pos;
@@ -145,11 +115,7 @@ function drawPlanet(p) {
     ctx.stroke();
   }
 
-  if (p.isEarth) {
-    drawEarth(p, pos);
-  } else {
-    PlanetArt.drawSphere(ctx, pos.x, pos.y, p.size, p.color);
-  }
+  PlanetArt.drawSphere(ctx, pos.x, pos.y, p.size, p.color);
 
   if (focused === p) {
     ctx.strokeStyle = '#fff';
